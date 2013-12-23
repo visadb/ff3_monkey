@@ -1,5 +1,3 @@
-#!/usr/bin/env jython
-
 import time
 from com.android.monkeyrunner import MonkeyRunner, MonkeyDevice
 from java.awt import Color
