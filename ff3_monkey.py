@@ -78,6 +78,7 @@ class MonkeyActions:
         if not os.path.exists(dirPath):
             os.mkdir(dirPath)
 
+        print "Writing screenshot to", pathToFile
         shot.writeToFile(pathToFile)
 
     def attack(self, enemy=1):
