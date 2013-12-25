@@ -102,7 +102,7 @@ class MonkeyActions:
         yCoord = TOP_ITEM_COORDS[1] + (zeroBasedItem%VISIBLE_ROWS)*ITEM_COORD_DELTA
         self.touch((TOP_ITEM_COORDS[0], yCoord), delayAfter)
 
-    def selectItemFromLargeMenu(self, itemPos, delayAfter=0.150):
+    def selectItemFromLargeMenu(self, itemPos, cols, delayAfter=0.150):
         zeroBasedItemPos = (itemPos[0]-1, itemPos[1]-1)
         VISIBLE_ROWS = 4
         scrollsNeeded = zeroBasedItemPos[1]/VISIBLE_ROWS
@@ -111,19 +111,32 @@ class MonkeyActions:
             self.touch(DOWN_ARROW_COORDS, 0.200)
 
         TOP_LEFT_ITEM_COORDS = (350, 350)
-        ITEM_COORD_DELTAS = (600, 108)
+        ITEM_COORD_DELTAS = (1260/cols, 108)
         xCoord = TOP_LEFT_ITEM_COORDS[0] + ITEM_COORD_DELTAS[0]*zeroBasedItemPos[0]
         yCoord = TOP_LEFT_ITEM_COORDS[1] + ITEM_COORD_DELTAS[1]*(zeroBasedItemPos[1] % VISIBLE_ROWS)
         self.touch((xCoord, yCoord), delayAfter)
+
+    def selectItemFromItemMenu(self, itemPos, delayAfter=0.150):
+        self.selectItemFromLargeMenu(itemPos, 2, delayAfter)
+
+    def selectItemFromSpellMenu(self, itemPos, delayAfter=0.150):
+        self.selectItemFromLargeMenu(itemPos, 4, delayAfter)
 
     def attack(self, enemy):
         self.selectItemFromLowerLeftMenu(1, 0.150)
         self.selectEnemy(enemy)
 
     def useRod(self, rodPos, enemy):
-        self.selectItemFromLowerLeftMenu(4, 0.400)
-        self.selectItemFromLargeMenu(rodPos, 0.200)
+        self.selectItemFromLowerLeftMenu(4, 0.300)
+        self.selectItemFromItemMenu(rodPos, 0.200)
         self.selectEnemy(enemy)
+
+    def castSpell(self, spellPos):
+        pass
+
+    def fightDrakeDrakeDrake(self):
+        self.attack(1) # Ingus kills First drake
+
 
     def addMenuActions(self, menu):
         menu.addAction("H", "Run left", lambda: self.run(Dir.left))
@@ -134,7 +147,7 @@ class MonkeyActions:
         menu.addAction("A", "Attack first enemy", lambda: self.attack(1))
         menu.addAction("R", "Use first rod on first enemy", lambda: self.useRod((1,1), 1))
         menu.addAction("1", "Fight Grenade Grenade Drake", lambda: time.sleep(1))
-        menu.addAction("2", "Fight Drake Drake Drake", lambda: time.sleep(1))
+        menu.addAction("2", "Fight Drake Drake Drake", self.fightDrakeDrakeDrake)
         menu.addAction("3", "Fight Drake Grenade", lambda: time.sleep(1))
 
 def main():
