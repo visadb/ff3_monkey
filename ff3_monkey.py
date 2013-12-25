@@ -59,19 +59,6 @@ class MonkeyActions:
     def __init__(self):
         self.device = MonkeyRunner.waitForConnection(1)
 
-    def touch(self, coords, type=MonkeyDevice.DOWN_AND_UP):
-        self.device.touch(coords[0], coords[1], type)
-
-    def run(self, dir, duration=1.0):
-        dragDistance = 100
-        startCoords = (150, 150)
-        endCoords = (startCoords[0] + dragDistance*dir[0], startCoords[1] + dragDistance*dir[1])
-        self.touch(startCoords, MonkeyDevice.DOWN)
-        sleep(0.05)
-        self.touch(endCoords, MonkeyDevice.DOWN)
-        sleep(duration)
-        self.touch(endCoords, MonkeyDevice.UP)
-
     def screenshot(self):
         import tempfile
         import os
@@ -85,9 +72,25 @@ class MonkeyActions:
         print "Writing screenshot to", pathToFile
         shot.writeToFile(pathToFile)
 
-    def attack(self, enemy=1):
-        targetCoords = {1:(240,490), 2:(240,580), 3:(240,670)}
-        targetCoords = targetCoords
+    def touch(self, coords, type=MonkeyDevice.DOWN_AND_UP, delayAfter=0.010):
+        self.device.touch(coords[0], coords[1], type)
+        sleep(delayAfter)
+
+    def run(self, dir, duration=1.0):
+        dragDistance = 100
+        startCoords = (150, 150)
+        endCoords = (startCoords[0] + dragDistance*dir[0], startCoords[1] + dragDistance*dir[1])
+        self.touch(startCoords, MonkeyDevice.DOWN, 0.050)
+        self.touch(endCoords, MonkeyDevice.DOWN, duration)
+        self.touch(endCoords, MonkeyDevice.UP)
+
+    def attack(self, enemy):
+        attackButtonCoords = MonkeyActions.LOWER_LEFT_BUTTON_COORDS[1]
+        enemyButtonCoords = MonkeyActions.LOWER_LEFT_BUTTON_COORDS[enemy]
+        self.touch(attackButtonCoords, delayAfter=0.100)
+        self.touch(enemyButtonCoords, delayAfter=0.100)
+        if enemy != 1:
+            self.touch(enemyButtonCoords, delayAfter=0.100)
 
     def addMenuActions(self, menu):
         menu.addAction("H", "Run left", lambda: self.run(Dir.left))
