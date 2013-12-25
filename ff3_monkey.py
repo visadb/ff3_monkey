@@ -55,7 +55,6 @@ class Dir:
     left = (-1, 0)
 
 class MonkeyActions:
-    LOWER_LEFT_BUTTON_COORDS = {1:(240,490), 2:(240,580), 3:(240,670)}
     def __init__(self):
         self.device = MonkeyRunner.waitForConnection(1)
 
@@ -72,7 +71,8 @@ class MonkeyActions:
         print "Writing screenshot to", pathToFile
         shot.writeToFile(pathToFile)
 
-    def touch(self, coords, type=MonkeyDevice.DOWN_AND_UP, delayAfter=0.010):
+    def touch(self, coords, delayAfter=0.010, type=MonkeyDevice.DOWN_AND_UP):
+        #print "Touching "+str(coords)+" (type="+str(type)+") and sleeping "+str(delayAfter)+"s"
         self.device.touch(coords[0], coords[1], type)
         sleep(delayAfter)
 
@@ -80,17 +80,50 @@ class MonkeyActions:
         dragDistance = 100
         startCoords = (150, 150)
         endCoords = (startCoords[0] + dragDistance*dir[0], startCoords[1] + dragDistance*dir[1])
-        self.touch(startCoords, MonkeyDevice.DOWN, 0.050)
-        self.touch(endCoords, MonkeyDevice.DOWN, duration)
-        self.touch(endCoords, MonkeyDevice.UP)
+        self.touch(startCoords, 0.050, MonkeyDevice.DOWN)
+        self.touch(endCoords, duration, MonkeyDevice.DOWN)
+        self.touch(endCoords, 0.050, MonkeyDevice.UP)
+
+    def selectEnemy(self, enemy):
+        self.selectItemFromLowerLeftMenu(enemy, 0.150)
+        if enemy != 1:
+            self.selectItemFromLowerLeftMenu(enemy, 0.150)
+
+    def selectItemFromLowerLeftMenu(self, item, delayAfter=0.150):
+        zeroBasedItem = item - 1
+        VISIBLE_ROWS = 3
+        scrollsNeeded = zeroBasedItem/VISIBLE_ROWS
+        lowerLeftMenuDownButtonCoords = (430, 650)
+        for i in range(scrollsNeeded):
+            self.touch(lowerLeftMenuDownButtonCoords, 0.200)
+
+        TOP_ITEM_COORDS = (240,490)
+        ITEM_COORD_DELTA = 90
+        yCoord = TOP_ITEM_COORDS[1] + (zeroBasedItem%VISIBLE_ROWS)*ITEM_COORD_DELTA
+        self.touch((TOP_ITEM_COORDS[0], yCoord), delayAfter)
+
+    def selectItemFromLargeMenu(self, itemPos, delayAfter=0.150):
+        zeroBasedItemPos = (itemPos[0]-1, itemPos[1]-1)
+        VISIBLE_ROWS = 4
+        scrollsNeeded = zeroBasedItemPos[1]/VISIBLE_ROWS
+        DOWN_ARROW_COORDS = (1193, 689)
+        for i in range(scrollsNeeded):
+            self.touch(DOWN_ARROW_COORDS, 0.200)
+
+        TOP_LEFT_ITEM_COORDS = (350, 350)
+        ITEM_COORD_DELTAS = (600, 108)
+        xCoord = TOP_LEFT_ITEM_COORDS[0] + ITEM_COORD_DELTAS[0]*zeroBasedItemPos[0]
+        yCoord = TOP_LEFT_ITEM_COORDS[1] + ITEM_COORD_DELTAS[1]*(zeroBasedItemPos[1] % VISIBLE_ROWS)
+        self.touch((xCoord, yCoord), delayAfter)
 
     def attack(self, enemy):
-        attackButtonCoords = MonkeyActions.LOWER_LEFT_BUTTON_COORDS[1]
-        enemyButtonCoords = MonkeyActions.LOWER_LEFT_BUTTON_COORDS[enemy]
-        self.touch(attackButtonCoords, delayAfter=0.100)
-        self.touch(enemyButtonCoords, delayAfter=0.100)
-        if enemy != 1:
-            self.touch(enemyButtonCoords, delayAfter=0.100)
+        self.selectItemFromLowerLeftMenu(1, 0.150)
+        self.selectEnemy(enemy)
+
+    def useRod(self, rodPos, enemy):
+        self.selectItemFromLowerLeftMenu(4, 0.400)
+        self.selectItemFromLargeMenu(rodPos, 0.200)
+        self.selectEnemy(enemy)
 
     def addMenuActions(self, menu):
         menu.addAction("H", "Run left", lambda: self.run(Dir.left))
@@ -99,10 +132,10 @@ class MonkeyActions:
         menu.addAction("L", "Run right", lambda: self.run(Dir.right))
         menu.addAction("S", "Take screenshot", self.screenshot)
         menu.addAction("A", "Attack first enemy", lambda: self.attack(1))
-        menu.addAction("1", "Attack Grenade Grenade Drake", lambda: time.sleep(1))
-        menu.addAction("2", "Attack Drake Drake Drake", lambda: time.sleep(1))
-        menu.addAction("3", "Attack Drake Grenade", lambda: time.sleep(1))
-
+        menu.addAction("R", "Use first rod on first enemy", lambda: self.useRod((1,1), 1))
+        menu.addAction("1", "Fight Grenade Grenade Drake", lambda: time.sleep(1))
+        menu.addAction("2", "Fight Drake Drake Drake", lambda: time.sleep(1))
+        menu.addAction("3", "Fight Drake Grenade", lambda: time.sleep(1))
 
 def main():
     menu = ActionMenu()
