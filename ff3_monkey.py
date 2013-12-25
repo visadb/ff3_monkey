@@ -1,4 +1,4 @@
-import time
+from time import sleep
 from com.android.monkeyrunner import MonkeyRunner, MonkeyDevice
 from java.awt import Color
 from javax.swing import AbstractAction, JComponent, JFrame, JTextArea, KeyStroke, Timer
@@ -46,7 +46,7 @@ class ActionMenu:
         print "Starting menu"
         self.frame.visible = True
         while True:
-            time.sleep(300)
+            sleep(300)
 
 class Dir:
     up = (0, -1)
@@ -55,18 +55,22 @@ class Dir:
     left = (-1, 0)
 
 class MonkeyActions:
+    LOWER_LEFT_BUTTON_COORDS = {1:(240,490), 2:(240,580), 3:(240,670)}
     def __init__(self):
         self.device = MonkeyRunner.waitForConnection(1)
 
+    def touch(self, coords, type=MonkeyDevice.DOWN_AND_UP):
+        self.device.touch(coords[0], coords[1], type)
+
     def run(self, dir, duration=1.0):
         dragDistance = 100
-        startX, startY = 150, 150
-        endX, endY = startX + dragDistance*dir[0], startY + dragDistance*dir[1]
-        self.device.touch(startX, startY, MonkeyDevice.DOWN)
-        time.sleep(0.05)
-        self.device.touch(endX, endY, MonkeyDevice.DOWN)
-        time.sleep(duration)
-        self.device.touch(endX, endY, MonkeyDevice.UP)
+        startCoords = (150, 150)
+        endCoords = (startCoords[0] + dragDistance*dir[0], startCoords[1] + dragDistance*dir[1])
+        self.touch(startCoords, MonkeyDevice.DOWN)
+        sleep(0.05)
+        self.touch(endCoords, MonkeyDevice.DOWN)
+        sleep(duration)
+        self.touch(endCoords, MonkeyDevice.UP)
 
     def screenshot(self):
         import tempfile
