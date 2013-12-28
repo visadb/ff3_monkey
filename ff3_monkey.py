@@ -2,22 +2,25 @@
 from time import sleep, strftime, time
 from com.android.monkeyrunner import MonkeyRunner, MonkeyDevice
 from java.awt import Color
-from javax.swing import AbstractAction, JComponent, JFrame, JTextArea, KeyStroke, Timer
+from javax.swing import AbstractAction, BoxLayout, JComponent, JFrame, JLabel, KeyStroke, Timer
 
 
 class MenuAction(AbstractAction):
-    def __init__(self, cb, desc, parentMenu):
+    def __init__(self, cb, key, desc, parentMenu):
         AbstractAction.__init__(self)
         self.cb = cb
+        self.key = key
         self.desc = desc
         self.parentMenu = parentMenu
     def actionPerformed(self, actionEvent):
         self.parentMenu.frame.title = self.parentMenu.titleBase+", "+self.desc+"..."
-        label = self.parentMenu.actionLabel
-        label.setBackground(Color.yellow)
+        label = self.parentMenu.actionLabels[self.key]
+        label.setBackground(Color.red)
+        label.setForeground(Color.yellow)
         def runCbAndResetMenu(action):
             self.cb()
             label.setBackground(self.parentMenu.defaultBackground)
+            label.setForeground(Color.black)
             self.parentMenu.frame.title = self.parentMenu.titleBase
         t = Timer(0, runCbAndResetMenu)
         t.setRepeats(False)
@@ -29,10 +32,9 @@ class ActionMenu:
         self.frame = JFrame(self.titleBase, defaultCloseOperation = JFrame.EXIT_ON_CLOSE, size=(400,400))
         self.inputMap = self.frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
         self.actionMap = self.frame.getRootPane().getActionMap()
-
-        self.actionLabel = JTextArea("Actions:", editable=False)
-        self.frame.add(self.actionLabel)
-        self.defaultBackground = self.actionLabel.getBackground()
+        self.actionLabels = {}
+        self.frame.getContentPane().setLayout(BoxLayout(self.frame.getContentPane(), BoxLayout.Y_AXIS))
+        self.defaultBackground = self.frame.getBackground()
 
         def quit():
             from java.lang import System
@@ -41,8 +43,10 @@ class ActionMenu:
         self.addAction("Q", "Quit", quit)
     def addAction(self, key, desc, cb):
         self.inputMap.put(KeyStroke.getKeyStroke("pressed "+key), key)
-        self.actionMap.put(key, MenuAction(cb, desc, self))
-        self.actionLabel.setText(self.actionLabel.getText()+"\n"+key+": "+desc)
+        self.actionMap.put(key, MenuAction(cb, key, desc, self))
+        self.actionLabels[key] = JLabel(key+": "+desc)
+        self.actionLabels[key].setOpaque(True)
+        self.frame.getContentPane().add(self.actionLabels[key])
     def run(self):
         print "Starting menu"
         self.frame.visible = True
