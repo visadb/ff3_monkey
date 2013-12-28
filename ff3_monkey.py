@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from time import sleep, strftime
 from com.android.monkeyrunner import MonkeyRunner, MonkeyDevice
 from java.awt import Color
@@ -48,6 +49,77 @@ class ActionMenu:
         while True:
             sleep(300)
 
+class GameState(object):
+    MAINSTATE_COMBAT   = "combat"
+    MAINSTATE_INSIDE   = "inside"
+    MAINSTATE_MENU     = "menu"
+    MAINSTATE_WORLDMAP = "worldmap"
+    MAINSTATE_UNKNOWN  = "unknown"
+    MAINSTATES = [MAINSTATE_COMBAT, MAINSTATE_INSIDE, MAINSTATE_MENU, MAINSTATE_WORLDMAP, MAINSTATE_UNKNOWN]
+
+    def __init__(self, mainState):
+        self.mainState = mainState
+
+    #@property
+    def getMainState(self):
+        return self._mainState
+    #@mainState.setter
+    def setMainState(self, val):
+        if val not in GameState.MAINSTATES:
+            raise ValueError("invalid mainState: "+str(val))
+        self._mainState = val
+    mainState = property(getMainState, setMainState)
+
+    def __str__(self):
+        return "GameState(%s)" % self.mainState
+
+class GameStateDetector:
+    def __init__(self, monkeydevice):
+        from java.io import File
+        from javax.imageio import ImageIO
+        import sys, os
+        self.device = monkeydevice
+        scriptDir = os.path.dirname(sys.argv[0])
+        self.mapTextSubImage = (ImageIO.read(File(os.path.join(scriptDir, "map_text.png"))), (938,35,82,41))
+
+    def checkPixelColors(self, pixelColors, screenshot=None):
+        screenshot = screenshot or self.device.takeSnapshot()
+        for pixelCoords,expectedColor in pixelColors:
+            pixelCoordsInScreenshot = self.horizontalCoordsToScreenshotCoords(pixelCoords, 720)
+            actualColor = screenshot.getRawPixel(*pixelCoordsInScreenshot)
+            if actualColor != expectedColor:
+                return False
+        return True
+
+    def horizontalCoordsToScreenshotCoords(self, coords, origHeight):
+        return (origHeight-coords[1]-1, coords[0])
+
+    def horizontalRectToScreenshotRect(self, rect):
+        return self.horizontalCoordsToScreenshotCoords((rect[0], rect[1]+rect[3]-1), 720) + (rect[3], rect[2])
+
+    def isSubImageOnScreen(self, subImage, screenshot=None):
+        screenshot = screenshot or self.device.takeSnapshot()
+        imagedata, rect = subImage
+        subImageOnScreen = screenshot.getSubImage(self.horizontalRectToScreenshotRect(rect))
+        for x in range(rect[2]):
+            for y in range(rect[3]):
+                screenshotCoords = self.horizontalCoordsToScreenshotCoords((x,y), rect[3])
+                screenPixel = subImageOnScreen.getRawPixelInt(*screenshotCoords) & 0xffffff
+                subImagePixel = imagedata.getRGB(x,y) & 0xffffff
+                #print "comparing image %s 0x%x with screen %s 0x%x" % ((x,y), subImagePixel, screenshotCoords, screenPixel)
+                if screenPixel != subImagePixel:
+                    return False
+        return True
+
+    def getMainState(self):
+        if self.isSubImageOnScreen(self.mapTextSubImage):
+            return GameState.MAINSTATE_WORLDMAP
+        else:
+            return GameState.MAINSTATE_UNKNOWN
+
+    def getCurrentState(self):
+        return GameState(self.getMainState())
+
 class Dir:
     up = (0, -1)
     right = (1, 0)
@@ -57,6 +129,7 @@ class Dir:
 class MonkeyActions:
     def __init__(self):
         self.device = MonkeyRunner.waitForConnection(1)
+        self.gameStateDetector = GameStateDetector(self.device)
 
     def screenshot(self):
         import tempfile
@@ -148,6 +221,14 @@ class MonkeyActions:
         self.attack(2) # Arc damages drake#2 but doesn't kill it
         self.castAttackSpell(6, 1, 3) # Refia kills drake#3
         self.useRod(1, 1, 2) # Ingus finishes off drake#2
+        #TODO: see if combat ends. if combat continues, do a fight+rod round
+        #TODO: if combat ends, tap screen until we are really outside combat
+
+    def fightDrakeGrenade(self):
+        self.attack(1) # Luneth kills drake#1
+        self.attack(2) # Arc damages/kills grenade
+        self.useRod(1, 2, 2) # Refia finishes off drake#2 with ice rod
+        self.useRod(1, 2, 2) # Ingus finishes off drake#2 with ice rod
 
     def castCureOutsideOfCombat(self):
         self.touch((1154, 57), 1.500) # Menu button
@@ -161,8 +242,24 @@ class MonkeyActions:
         self.pressBack(0.200) # back to main menu
         self.pressBack(1.200) # back to game view
 
+    def restInInvincible(self):
+        # TODO: 1) not outside -> run up and sleep, else finish 2) in fight -> fight, else goto 1)
+
+        while self.getMainState() != GameState.MAINSTATE_WORLDMAP:
+            print "Not outside yet, running up..."
+            self.run(Dir.up, 1.5)
+            sleep(2.0)
+        print "Now we are outside"
+
+    def getMainState(self):
+        return self.gameStateDetector.getCurrentState().mainState
+
+    def printCurrentState(self):
+        print self.gameStateDetector.getCurrentState()
+
     def addMenuActions(self, menu):
         menu.addAction("S", "Take screenshot", self.screenshot)
+        menu.addAction("MINUS", "Print game state to stdout", self.printCurrentState)
         menu.addAction("H", "Run left", lambda: self.run(Dir.left, 1.0))
         menu.addAction("J", "Run down", lambda: self.run(Dir.down, 1.0))
         menu.addAction("K", "Run up", lambda: self.run(Dir.up, 1.0))
@@ -170,8 +267,9 @@ class MonkeyActions:
         menu.addAction("B", "Back", self.pressBack)
         menu.addAction("1", "Fight Drake Drake Drake", self.fightDrakeDrakeDrake)
         menu.addAction("2", "Fight Grenade Grenade Drake", lambda: sleep(1))
-        menu.addAction("3", "Fight Drake Grenade", lambda: sleep(1))
+        menu.addAction("3", "Fight Drake Grenade", self.fightDrakeGrenade)
         menu.addAction("C", "Cure outside of combat", self.castCureOutsideOfCombat)
+        menu.addAction("R", "Rest in Invincible", self.restInInvincible)
         menu.addAction("A", "Attack first enemy", lambda: self.attack(1))
         menu.addAction("0", "Use first rod on first enemy", lambda: self.useRod(1, 1, 1))
 
