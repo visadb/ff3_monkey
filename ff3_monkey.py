@@ -77,6 +77,7 @@ class GameStateDetector:
     def __init__(self, monkeydevice):
         self.device = monkeydevice
         self.worldmapDetectionSubImage = (self.readImageFile("map_text.png"), (938,35,82,41))
+        self.menuDetectionSubImage = (self.readImageFile("menu_back_text.png"), (608,672,35,24))
 
     @staticmethod
     def readImageFile(filename):
@@ -103,24 +104,42 @@ class GameStateDetector:
     def horizontalRectToScreenshotRect(rect):
         return GameStateDetector.horizontalCoordsToScreenshotCoords((rect[0], rect[1]+rect[3]-1), 720) + (rect[3], rect[2])
 
-    def isSubImageOnScreen(self, subImage, screenshot=None):
+    def isSubImageOnScreen(self, subImage, requiredSimilarityPercent=99.8, screenshot=None):
         screenshot = screenshot or self.device.takeSnapshot()
         imagedata, rect = subImage
         subImageOnScreen = screenshot.getSubImage(self.horizontalRectToScreenshotRect(rect))
-        for x in range(rect[2]):
-            for y in range(rect[3]):
+        maxAllowedDissimilarity = max(0, rect[2]*rect[3]*0xff*3 * (100.0-requiredSimilarityPercent)/100.0)
+        dissimilarity = 0
+        for y in range(rect[3]):
+            for x in range(rect[2]):
                 screenshotCoords = self.horizontalCoordsToScreenshotCoords((x,y), rect[3])
                 screenPixel = subImageOnScreen.getRawPixelInt(*screenshotCoords) & 0xffffff
                 subImagePixel = imagedata.getRGB(x,y) & 0xffffff
                 #print "comparing image %s 0x%x with screen %s 0x%x" % ((x,y), subImagePixel, screenshotCoords, screenPixel)
-                if screenPixel != subImagePixel:
-                    return False
-        return True
+                dissimilarity += self.getPixelDissimilarity(screenPixel, subImagePixel)
+                if dissimilarity > maxAllowedDissimilarity:
+                    break
+        print "Dissimilarity %.1f/%.1f" % (dissimilarity, maxAllowedDissimilarity)
+        return dissimilarity <= maxAllowedDissimilarity
+
+    @staticmethod
+    def getPixelDissimilarity(color1, color2):
+        dissimilarity = 0
+        for component in range(3):
+            componentVal1 = GameStateDetector.getColorComponent(color1, component)
+            componentVal2 = GameStateDetector.getColorComponent(color2, component)
+            dissimilarity += abs(componentVal1 - componentVal2)
+        return dissimilarity
+    @staticmethod
+    def getColorComponent(color, componentNumber):
+            return (color & (0xff << (componentNumber*8))) >> (componentNumber*8)
 
     def getMainState(self):
         screenshot = self.device.takeSnapshot()
-        if self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot):
+        if self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot=screenshot):
             return GameState.MAINSTATE_WORLDMAP
+        elif self.isSubImageOnScreen(self.menuDetectionSubImage, screenshot=screenshot):
+            return GameState.MAINSTATE_MENU
         else:
             return GameState.MAINSTATE_UNKNOWN
 
