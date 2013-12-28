@@ -75,12 +75,16 @@ class GameState(object):
 
 class GameStateDetector:
     def __init__(self, monkeydevice):
+        self.device = monkeydevice
+        self.worldmapDetectionSubImage = (self.readImageFile("map_text.png"), (938,35,82,41))
+
+    @staticmethod
+    def readImageFile(filename):
         from java.io import File
         from javax.imageio import ImageIO
         import sys, os
-        self.device = monkeydevice
         scriptDir = os.path.dirname(sys.argv[0])
-        self.mapTextSubImage = (ImageIO.read(File(os.path.join(scriptDir, "map_text.png"))), (938,35,82,41))
+        return ImageIO.read(File(os.path.join(scriptDir, filename)))
 
     def checkPixelColors(self, pixelColors, screenshot=None):
         screenshot = screenshot or self.device.takeSnapshot()
@@ -91,11 +95,13 @@ class GameStateDetector:
                 return False
         return True
 
-    def horizontalCoordsToScreenshotCoords(self, coords, origHeight):
+    @staticmethod
+    def horizontalCoordsToScreenshotCoords(coords, origHeight):
         return (origHeight-coords[1]-1, coords[0])
 
-    def horizontalRectToScreenshotRect(self, rect):
-        return self.horizontalCoordsToScreenshotCoords((rect[0], rect[1]+rect[3]-1), 720) + (rect[3], rect[2])
+    @staticmethod
+    def horizontalRectToScreenshotRect(rect):
+        return GameStateDetector.horizontalCoordsToScreenshotCoords((rect[0], rect[1]+rect[3]-1), 720) + (rect[3], rect[2])
 
     def isSubImageOnScreen(self, subImage, screenshot=None):
         screenshot = screenshot or self.device.takeSnapshot()
@@ -112,7 +118,8 @@ class GameStateDetector:
         return True
 
     def getMainState(self):
-        if self.isSubImageOnScreen(self.mapTextSubImage):
+        screenshot = self.device.takeSnapshot()
+        if self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot):
             return GameState.MAINSTATE_WORLDMAP
         else:
             return GameState.MAINSTATE_UNKNOWN
