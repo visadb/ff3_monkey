@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from time import sleep, strftime
+from time import sleep, strftime, time
 from com.android.monkeyrunner import MonkeyRunner, MonkeyDevice
 from java.awt import Color
 from javax.swing import AbstractAction, JComponent, JFrame, JTextArea, KeyStroke, Timer
@@ -26,7 +26,7 @@ class MenuAction(AbstractAction):
 class ActionMenu:
     def __init__(self):
         self.titleBase = 'FF3 Monkey'
-        self.frame = JFrame(self.titleBase, defaultCloseOperation = JFrame.EXIT_ON_CLOSE, size=(400,300))
+        self.frame = JFrame(self.titleBase, defaultCloseOperation = JFrame.EXIT_ON_CLOSE, size=(400,400))
         self.inputMap = self.frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
         self.actionMap = self.frame.getRootPane().getActionMap()
 
@@ -77,7 +77,9 @@ class GameStateDetector:
     def __init__(self, monkeydevice):
         self.device = monkeydevice
         self.worldmapDetectionSubImage = (self.readImageFile("map_text.png"), (938,35,82,41))
+        self.insideDetectionSubImage = (self.readImageFile("menu_button_e.png"), (1133,46,20,20))
         self.menuDetectionSubImage = (self.readImageFile("menu_back_text.png"), (608,672,35,24))
+        self.combatDetectionSubImage = (self.readImageFile("lower_left_menu_upper_left_corner.png"), (88,444,12,4))
 
     @staticmethod
     def readImageFile(filename):
@@ -119,7 +121,7 @@ class GameStateDetector:
                 dissimilarity += self.getPixelDissimilarity(screenPixel, subImagePixel)
                 if dissimilarity > maxAllowedDissimilarity:
                     break
-        print "Dissimilarity %.1f/%.1f" % (dissimilarity, maxAllowedDissimilarity)
+        #print "Dissimilarity %.1f/%.1f" % (dissimilarity, maxAllowedDissimilarity)
         return dissimilarity <= maxAllowedDissimilarity
 
     @staticmethod
@@ -136,8 +138,12 @@ class GameStateDetector:
 
     def getMainState(self):
         screenshot = self.device.takeSnapshot()
-        if self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot=screenshot):
+        if self.isSubImageOnScreen(self.combatDetectionSubImage, 99.9, screenshot=screenshot):
+            return GameState.MAINSTATE_COMBAT
+        elif self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot=screenshot):
             return GameState.MAINSTATE_WORLDMAP
+        elif self.isSubImageOnScreen(self.insideDetectionSubImage, screenshot=screenshot):
+            return GameState.MAINSTATE_INSIDE
         elif self.isSubImageOnScreen(self.menuDetectionSubImage, screenshot=screenshot):
             return GameState.MAINSTATE_MENU
         else:
@@ -174,6 +180,9 @@ class MonkeyActions:
         #print "Touching "+str(coords)+" (type="+str(type)+") and sleeping "+str(delayAfter)+"s"
         self.device.touch(coords[0], coords[1], type)
         sleep(delayAfter)
+
+    def tapScreen(self, delayAfter=0.150, coords=(640,360)):
+        self.touch(coords, delayAfter, MonkeyDevice.DOWN_AND_UP)
 
     def pressBack(self, delayAfter=0.150):
         self.device.press("KEYCODE_BACK", MonkeyDevice.DOWN_AND_UP)
@@ -268,14 +277,57 @@ class MonkeyActions:
         self.pressBack(0.200) # back to main menu
         self.pressBack(1.200) # back to game view
 
-    def restInInvincible(self):
-        # TODO: 1) not outside -> run up and sleep, else finish 2) in fight -> fight, else goto 1)
+    def restInInvincibleAndReturn(self):
+        startTime = time()
+        print "=== Rest in Invincible ==="
+        print "Exiting Bahamut's lair..."
+        self.run(Dir.up, 1.5)
+        while True:
+            mainState = self.getMainState()
+            if mainState == GameState.MAINSTATE_WORLDMAP:
+                print "We are outside, yay"
+                break
+            elif mainState == GameState.MAINSTATE_COMBAT:
+                print "We got into a fight, trying to run away"
+                self.runAwayFromCombat()
+                continue
+            elif mainState == GameState.MAINSTATE_INSIDE:
+                print "Still inside, running up..."
+                self.run(Dir.up, 2.0)
+                continue
+            else:
+                print "Unexpected state=%s, will wait and try again" % mainState
+                sleep(0.5)
+                continue
+        print "Entering Invincible and running to the bed..."
+        self.tapScreen(2.100)
+        self.run(Dir.up, 1.000)
+        self.run(Dir.left, 1.500)
+        self.run(Dir.down, 0.650)
+        self.run(Dir.right, 0.150)
+        sleep(0.200) # wait for exclamation bubble
+        print "Sleeping..."
+        self.tapScreen(1.000) #use bed
+        self.touch((640,520), 14.500) #tap Yes
+        self.tapScreen(1.200) #slept like a log...
+        self.tapScreen(0.200) #HP and MP restored
+        print "Running back to the cave..."
+        self.run(Dir.up, 0.900)
+        self.run(Dir.right, 1.350)
+        self.run(Dir.down, 1.050)
+        self.run(Dir.left, 1.200)
+        sleep(1.1) # wait for exit
+        self.run(Dir.up, 1.5)  # enter Bahamut's lair
+        sleep(1.0) # wait for entry
+        self.run(Dir.down, 1.0) # run to the hunting spot
+        # TODO: make sure we did not get into a fight
+        print "Done resting, took %.1fs" % ((time()-startTime))
 
-        while self.getMainState() != GameState.MAINSTATE_WORLDMAP:
-            print "Not outside yet, running up..."
-            self.run(Dir.up, 1.5)
-            sleep(2.0)
-        print "Now we are outside"
+    def runAwayFromCombat(self):
+        runAwayButtonCoords = (1130,45)
+        for i in range(4):
+            self.touch(runAwayButtonCoords, 1.0)
+        sleep(5.0)
 
     def getMainState(self):
         return self.gameStateDetector.getCurrentState().mainState
@@ -284,20 +336,23 @@ class MonkeyActions:
         print self.gameStateDetector.getCurrentState()
 
     def addMenuActions(self, menu):
+        runDuration = 0.5
         menu.addAction("S", "Take screenshot", self.screenshot)
         menu.addAction("MINUS", "Print game state to stdout", self.printCurrentState)
-        menu.addAction("H", "Run left", lambda: self.run(Dir.left, 1.0))
-        menu.addAction("J", "Run down", lambda: self.run(Dir.down, 1.0))
-        menu.addAction("K", "Run up", lambda: self.run(Dir.up, 1.0))
-        menu.addAction("L", "Run right", lambda: self.run(Dir.right, 1.0))
+        menu.addAction("H", "Run left", lambda: self.run(Dir.left, runDuration))
+        menu.addAction("J", "Run down", lambda: self.run(Dir.down, runDuration))
+        menu.addAction("K", "Run up", lambda: self.run(Dir.up, runDuration))
+        menu.addAction("L", "Run right", lambda: self.run(Dir.right, runDuration))
         menu.addAction("B", "Back", self.pressBack)
+        menu.addAction("T", "Tap the screen", self.tapScreen)
         menu.addAction("1", "Fight Drake Drake Drake", self.fightDrakeDrakeDrake)
         menu.addAction("2", "Fight Grenade Grenade Drake", lambda: sleep(1))
         menu.addAction("3", "Fight Drake Grenade", self.fightDrakeGrenade)
         menu.addAction("C", "Cure outside of combat", self.castCureOutsideOfCombat)
-        menu.addAction("R", "Rest in Invincible", self.restInInvincible)
+        menu.addAction("R", "Rest in Invincible", self.restInInvincibleAndReturn)
         menu.addAction("A", "Attack first enemy", lambda: self.attack(1))
         menu.addAction("0", "Use first rod on first enemy", lambda: self.useRod(1, 1, 1))
+        menu.addAction("E", "Escape from combat", self.runAwayFromCombat)
 
 def main():
     menu = ActionMenu()
