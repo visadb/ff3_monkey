@@ -81,28 +81,44 @@ class ActionMenu:
             sleep(300)
 
 class GameState(object):
-    MAINSTATE_COMBAT   = "combat"
-    MAINSTATE_INSIDE   = "inside"
-    MAINSTATE_MENU     = "menu"
-    MAINSTATE_WORLDMAP = "worldmap"
-    MAINSTATE_UNKNOWN  = "unknown"
+    MAINSTATE_COMBAT   = "main_combat"
+    MAINSTATE_INSIDE   = "main_inside"
+    MAINSTATE_MENU     = "main_menu"
+    MAINSTATE_WORLDMAP = "main_worldmap"
+    MAINSTATE_UNKNOWN  = "main_unknown"
     MAINSTATES = [MAINSTATE_COMBAT, MAINSTATE_INSIDE, MAINSTATE_MENU, MAINSTATE_WORLDMAP, MAINSTATE_UNKNOWN]
 
-    def __init__(self, mainState):
-        self.mainState = mainState
+    COMBATSTATE_TURN_BEGIN = "combat_turn_begin"
+    COMBATSTATE_TURN_INCOMPLETE = "combat_turn_incomplete"
+    COMBATSTATE_MENU = "combat_menu"
+    COMBATSTATE_VICTORY_NOTIFICATION = "combat_victory_notification"
+    COMBATSTATE_UNKNOWN = "combat_unknown"
+    COMBATSTATES = [ None, COMBATSTATE_TURN_BEGIN, COMBATSTATE_TURN_INCOMPLETE, COMBATSTATE_MENU, COMBATSTATE_VICTORY_NOTIFICATION, COMBATSTATE_UNKNOWN ]
 
-    #@property
+    def __init__(self, mainState, combatState):
+        self.mainState = mainState
+        self.combatState = combatState
+
     def getMainState(self):
         return self._mainState
-    #@mainState.setter
     def setMainState(self, val):
-        if val not in GameState.MAINSTATES:
+        if val not in self.MAINSTATES:
             raise ValueError("invalid mainState: "+str(val))
         self._mainState = val
     mainState = property(getMainState, setMainState)
 
+    def getCombatState(self):
+        return self._combatState
+    def setCombatState(self, val):
+        if val != None and self.mainState != self.MAINSTATE_COMBAT:
+            raise ValueError("cannot set combatState when mainState != MAINSTATE_COMBAT")
+        if val not in self.COMBATSTATES:
+            raise ValueError("invalid combatState: "+str(val))
+        self._combatState = val
+    combatState = property(getCombatState, setCombatState)
+
     def __str__(self):
-        return "GameState(%s)" % self.mainState
+        return "GameState(%s, %s)" % (self.mainState, self.combatState)
 
 class GameStateDetector:
     def __init__(self, monkeydevice):
@@ -111,6 +127,7 @@ class GameStateDetector:
         self.insideDetectionSubImage = (self.readImageFile("menu_button_e.png"), (1133,46,20,20))
         self.menuDetectionSubImage = (self.readImageFile("menu_back_text.png"), (608,672,35,24))
         self.combatDetectionSubImage = (self.readImageFile("lower_left_menu_upper_left_corner.png"), (88,444,12,4))
+        self.combatMenuDetectionSubImage = (self.readImageFile("combat_menu_explanation_frame.png"), (254,53,5,5))
 
     @staticmethod
     def readImageFile(filename):
@@ -167,21 +184,36 @@ class GameStateDetector:
     def getColorComponent(color, componentNumber):
             return (color & (0xff << (componentNumber*8))) >> (componentNumber*8)
 
-    def getMainState(self):
-        screenshot = self.device.takeSnapshot()
+    def _isInCombat(self, screenshot):
         if self.isSubImageOnScreen(self.combatDetectionSubImage, 99.9, screenshot=screenshot):
-            return GameState.MAINSTATE_COMBAT
-        elif self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot=screenshot):
+            return True
+        elif self.isSubImageOnScreen(self.combatMenuDetectionSubImage, 99.9, screenshot=screenshot):
+            return True
+        else:
+            return False
+
+    def getMainState(self, screenshot=None):
+        screenshot = screenshot or self.device.takeSnapshot()
+        if self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot=screenshot):
             return GameState.MAINSTATE_WORLDMAP
         elif self.isSubImageOnScreen(self.insideDetectionSubImage, screenshot=screenshot):
             return GameState.MAINSTATE_INSIDE
+        elif self._isInCombat(screenshot):
+            return GameState.MAINSTATE_COMBAT
         elif self.isSubImageOnScreen(self.menuDetectionSubImage, screenshot=screenshot):
             return GameState.MAINSTATE_MENU
         else:
             return GameState.MAINSTATE_UNKNOWN
 
-    def getCurrentState(self):
-        return GameState(self.getMainState())
+    def getCombatState(self, screenshot=None):
+        screenshot = screenshot or self.device.takeSnapshot()
+        return GameState.COMBATSTATE_UNKNOWN
+
+    def getGameState(self):
+        screenshot = self.device.takeSnapshot()
+        mainState = self.getMainState(screenshot)
+        combatState = mainState==GameState.MAINSTATE_COMBAT and self.getCombatState(screenshot) or None
+        return GameState(mainState, combatState)
 
 class Dir:
     up = (0, -1)
@@ -387,10 +419,10 @@ class MonkeyActions:
         sleep(5.0)
 
     def getMainState(self):
-        return self.gameStateDetector.getCurrentState().mainState
+        return self.gameStateDetector.getMainState()
 
     def printCurrentState(self):
-        print self.gameStateDetector.getCurrentState()
+        print self.gameStateDetector.getGameState()
 
     def addMenuActions(self, menu):
         runDurationNormal = 0.5
