@@ -27,7 +27,7 @@ class MenuAction(AbstractAction):
             return
         elif self.parentMenu.actionThread != None:
             return
-        print "Running action", self.desc
+        print "Running action:", self.desc
         self.parentMenu.frame.title = self.parentMenu.titleBase+", "+self.desc+"..."
         label = self.parentMenu.actionLabels[self.key]
         label.setBackground(Color.red)
@@ -61,7 +61,15 @@ class ActionMenu:
         self.addAction("Q", "Quit", quit)
         self.addAction("ESCAPE", "Abort current action", lambda: None)
     def addAction(self, key, desc, cb):
-        self.inputMap.put(KeyStroke.getKeyStroke("pressed "+key), key)
+        if " " in key:
+            strokeString = key
+        else:
+            strokeString = "pressed "+key
+
+        stroke = KeyStroke.getKeyStroke(strokeString)
+        if stroke == None:
+            raise ValueError("Invalid key: "+str(key))
+        self.inputMap.put(stroke, key)
         self.actionMap.put(key, MenuAction(cb, key, desc, self))
         self.actionLabels[key] = JLabel(key+": "+desc)
         self.actionLabels[key].setOpaque(True)
