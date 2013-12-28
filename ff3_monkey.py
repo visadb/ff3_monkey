@@ -367,13 +367,18 @@ class MonkeyActions:
         print self.gameStateDetector.getCurrentState()
 
     def addMenuActions(self, menu):
-        runDuration = 0.5
+        runDurationNormal = 0.5
+        runDurationShort = 0.2
         menu.addAction("S", "Take screenshot", self.screenshot)
         menu.addAction("MINUS", "Print game state to stdout", self.printCurrentState)
-        menu.addAction("H", "Run left", lambda: self.run(Dir.left, runDuration))
-        menu.addAction("J", "Run down", lambda: self.run(Dir.down, runDuration))
-        menu.addAction("K", "Run up", lambda: self.run(Dir.up, runDuration))
-        menu.addAction("L", "Run right", lambda: self.run(Dir.right, runDuration))
+        menu.addAction("H", "Run left", lambda: self.run(Dir.left, runDurationNormal))
+        menu.addAction("J", "Run down", lambda: self.run(Dir.down, runDurationNormal))
+        menu.addAction("K", "Run up", lambda: self.run(Dir.up, runDurationNormal))
+        menu.addAction("L", "Run right", lambda: self.run(Dir.right, runDurationNormal))
+        menu.addAction("alt H", "Run left a little", lambda: self.run(Dir.left, runDurationShort))
+        menu.addAction("alt J", "Run down a little", lambda: self.run(Dir.down, runDurationShort))
+        menu.addAction("alt K", "Run up a little", lambda: self.run(Dir.up, runDurationShort))
+        menu.addAction("alt L", "Run right a little", lambda: self.run(Dir.right, runDurationShort))
         menu.addAction("B", "Back", self.pressBack)
         menu.addAction("T", "Tap the screen", self.tapScreen)
         menu.addAction("1", "Fight Drake Drake Drake", self.fightDrakeDrakeDrake)
