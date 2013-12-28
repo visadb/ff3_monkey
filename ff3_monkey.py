@@ -326,6 +326,10 @@ class MonkeyActions:
                 print "Still inside, running up..."
                 self.run(Dir.up, 2.0)
                 continue
+            elif mainState == GameState.MAINSTATE_MENU:
+                print "In menu, backing up"
+                self.pressBack(2.0)
+                continue
             else:
                 print "Unexpected state=%s, will wait and try again" % mainState
                 sleep(0.5)
@@ -353,6 +357,28 @@ class MonkeyActions:
         self.run(Dir.down, 1.0) # run to the hunting spot
         # TODO: make sure we did not get into a fight
         print "Done resting, took %.1fs" % ((time()-startTime))
+
+    def enterCombat(self):
+        print "=== Enter combat ==="
+        while True:
+            mainState = self.getMainState()
+            if mainState == GameState.MAINSTATE_COMBAT:
+                print "We are in combat, yay"
+                break
+            elif mainState == GameState.MAINSTATE_MENU:
+                print "In menu, backing up"
+                self.pressBack(2.0)
+                continue
+            elif mainState in [GameState.MAINSTATE_WORLDMAP, GameState.MAINSTATE_INSIDE]:
+                print "Running around"
+                for i in range(5):
+                    self.run(Dir.left, 0.25)
+                    self.run(Dir.right, 0.25)
+                continue
+            else:
+                print "Unexpected state=%s, will wait and try again" % mainState
+                sleep(0.5)
+                continue
 
     def runAwayFromCombat(self):
         runAwayButtonCoords = (1130,45)
@@ -388,6 +414,7 @@ class MonkeyActions:
         menu.addAction("R", "Rest in Invincible", self.restInInvincibleAndReturn)
         menu.addAction("A", "Attack first enemy", lambda: self.attack(1))
         menu.addAction("0", "Use first rod on first enemy", lambda: self.useRod(1, 1, 1))
+        menu.addAction("N", "eNter combat", self.enterCombat)
         menu.addAction("E", "Escape from combat", self.runAwayFromCombat)
         menu.addAction("Z", "Sleep for 4 secs", lambda: sleep(4))
 
