@@ -2,7 +2,7 @@
 from time import sleep, strftime, time
 from com.android.monkeyrunner import MonkeyRunner, MonkeyDevice
 from java.awt import Color
-from javax.swing import AbstractAction, BoxLayout, JComponent, JFrame, JLabel, KeyStroke, Timer
+from javax.swing import AbstractAction, BoxLayout, JComponent, JFrame, JLabel, KeyStroke
 
 
 class MenuAction(AbstractAction):
@@ -13,18 +13,34 @@ class MenuAction(AbstractAction):
         self.desc = desc
         self.parentMenu = parentMenu
     def actionPerformed(self, actionEvent):
+        from java.lang import Thread, ThreadDeath
+        def resetParentMenu():
+            label = self.parentMenu.actionLabels[self.key]
+            label.setBackground(self.parentMenu.defaultBackground)
+            label.setForeground(Color.black)
+            self.parentMenu.frame.title = self.parentMenu.titleBase
+            self.parentMenu.actionThread = None
+
+        if self.parentMenu.actionThread != None and self.key == "ESCAPE":
+            self.parentMenu.actionThread.stop()
+            resetParentMenu()
+            return
+        elif self.parentMenu.actionThread != None:
+            return
+        print "Running action", self.desc
         self.parentMenu.frame.title = self.parentMenu.titleBase+", "+self.desc+"..."
         label = self.parentMenu.actionLabels[self.key]
         label.setBackground(Color.red)
         label.setForeground(Color.yellow)
-        def runCbAndResetMenu(action):
-            self.cb()
-            label.setBackground(self.parentMenu.defaultBackground)
-            label.setForeground(Color.black)
-            self.parentMenu.frame.title = self.parentMenu.titleBase
-        t = Timer(0, runCbAndResetMenu)
-        t.setRepeats(False)
-        t.start()
+        def runCbAndResetMenu():
+            try:
+                self.cb()
+            except ThreadDeath:
+                print "Action aborted:", self.desc
+            finally:
+                resetParentMenu()
+        self.parentMenu.actionThread = Thread(runCbAndResetMenu)
+        self.parentMenu.actionThread.start()
 
 class ActionMenu:
     def __init__(self):
@@ -33,14 +49,17 @@ class ActionMenu:
         self.inputMap = self.frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
         self.actionMap = self.frame.getRootPane().getActionMap()
         self.actionLabels = {}
-        self.frame.getContentPane().setLayout(BoxLayout(self.frame.getContentPane(), BoxLayout.Y_AXIS))
+        self.actionThread = None
+
         self.defaultBackground = self.frame.getBackground()
+        self.frame.getContentPane().setLayout(BoxLayout(self.frame.getContentPane(), BoxLayout.Y_AXIS))
 
         def quit():
             from java.lang import System
             print "Quitting..."
             System.exit(0)
         self.addAction("Q", "Quit", quit)
+        self.addAction("ESCAPE", "Abort current action", lambda: None)
     def addAction(self, key, desc, cb):
         self.inputMap.put(KeyStroke.getKeyStroke("pressed "+key), key)
         self.actionMap.put(key, MenuAction(cb, key, desc, self))
@@ -357,6 +376,7 @@ class MonkeyActions:
         menu.addAction("A", "Attack first enemy", lambda: self.attack(1))
         menu.addAction("0", "Use first rod on first enemy", lambda: self.useRod(1, 1, 1))
         menu.addAction("E", "Escape from combat", self.runAwayFromCombat)
+        menu.addAction("Z", "Sleep for 4 secs", lambda: sleep(4))
 
 def main():
     menu = ActionMenu()
