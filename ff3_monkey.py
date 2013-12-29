@@ -123,25 +123,29 @@ class GameState(object):
 class GameStateDetector:
     def __init__(self, monkeydevice):
         self.device = monkeydevice
-        self.worldmapDetectionSubImage = (self.readImageFile("map_text.png"), (938,35,82,41))
-        self.insideDetectionSubImage = (self.readImageFile("menu_button_e.png"), (1133,46,20,20))
-        self.menuDetectionSubImage = (self.readImageFile("menu_back_text.png"), (608,672,35,24))
-        self.combatDetectionSubImage = (self.readImageFile("lower_left_menu_upper_left_corner.png"), (88,444,12,4))
-        self.combatMenuDetectionSubImage = (self.readImageFile("combat_menu_explanation_frame.png"), (254,53,5,5))
+
+        # subImageDetectionSpecs: (BufferedImage, (x,y,w,h), requiredSimilarityPercent)
+        self.worldmapDetection = (self.readImg("map_text.png"), (938,35,82,41), 99.8)
+        self.insideDetection = (self.readImg("menu_button_e.png"), (1133,46,20,20), 99.8)
+        self.menuDetection = (self.readImg("menu_back_text.png"), (608,672,35,24), 99.8)
+        self.combatMainDetection = (self.readImg("lower_left_menu_upper_left_corner.png"), (88,444,12,4), 99.9)
+        self.combatMenuDetection = (self.readImg("combat_menu_explanation_frame.png"), (254,53,5,5), 99.9)
+        self.combatBackButtonDetection = (self.readImg("combat_back_button_frame.png"), (46,1,5,6), 99.9)
+        self.combatVictoryDetection = (self.readImg("combat_victory_notification_frame.png"), (53,52,5,5), 99.9)
 
     @staticmethod
-    def readImageFile(filename):
+    def readImg(filename):
         from java.io import File
         from javax.imageio import ImageIO
         import sys, os
         scriptDir = os.path.dirname(sys.argv[0])
         return ImageIO.read(File(os.path.join(scriptDir, filename)))
 
-    def checkPixelColors(self, pixelColors, screenshot=None):
-        screenshot = screenshot or self.device.takeSnapshot()
+    def checkPixelColors(self, pixelColors, shot=None):
+        shot = shot or self.device.takeSnapshot()
         for pixelCoords,expectedColor in pixelColors:
             pixelCoordsInScreenshot = self.horizontalCoordsToScreenshotCoords(pixelCoords, 720)
-            actualColor = screenshot.getRawPixel(*pixelCoordsInScreenshot)
+            actualColor = shot.getRawPixel(*pixelCoordsInScreenshot)
             if actualColor != expectedColor:
                 return False
         return True
@@ -154,10 +158,11 @@ class GameStateDetector:
     def horizontalRectToScreenshotRect(rect):
         return GameStateDetector.horizontalCoordsToScreenshotCoords((rect[0], rect[1]+rect[3]-1), 720) + (rect[3], rect[2])
 
-    def isSubImageOnScreen(self, subImage, requiredSimilarityPercent=99.8, screenshot=None):
-        screenshot = screenshot or self.device.takeSnapshot()
-        imagedata, rect = subImage
-        subImageOnScreen = screenshot.getSubImage(self.horizontalRectToScreenshotRect(rect))
+    def checkSubImage(self, subImageDetectionSpec, shot=None):
+        shot = shot or self.device.takeSnapshot()
+        imagedata, rect, requiredSimilarityPercent = subImageDetectionSpec
+        subImageOnScreen = shot.getSubImage(self.horizontalRectToScreenshotRect(rect))
+
         maxAllowedDissimilarity = max(0, rect[2]*rect[3]*0xff*3 * (100.0-requiredSimilarityPercent)/100.0)
         dissimilarity = 0
         for y in range(rect[3]):
@@ -184,35 +189,40 @@ class GameStateDetector:
     def getColorComponent(color, componentNumber):
             return (color & (0xff << (componentNumber*8))) >> (componentNumber*8)
 
-    def _isInCombat(self, screenshot):
-        if self.isSubImageOnScreen(self.combatDetectionSubImage, 99.9, screenshot=screenshot):
-            return True
-        elif self.isSubImageOnScreen(self.combatMenuDetectionSubImage, 99.9, screenshot=screenshot):
-            return True
-        else:
-            return False
+    def _isInCombat(self, shot):
+        if self.checkSubImage(self.combatMainDetection, shot): return True
+        elif self.checkSubImage(self.combatMenuDetection, shot): return True
+        elif self.checkSubImage(self.combatVictoryDetection, shot): return True
+        else: return False
 
-    def getMainState(self, screenshot=None):
-        screenshot = screenshot or self.device.takeSnapshot()
-        if self.isSubImageOnScreen(self.worldmapDetectionSubImage, screenshot=screenshot):
-            return GameState.MAINSTATE_WORLDMAP
-        elif self.isSubImageOnScreen(self.insideDetectionSubImage, screenshot=screenshot):
-            return GameState.MAINSTATE_INSIDE
-        elif self._isInCombat(screenshot):
-            return GameState.MAINSTATE_COMBAT
-        elif self.isSubImageOnScreen(self.menuDetectionSubImage, screenshot=screenshot):
-            return GameState.MAINSTATE_MENU
-        else:
-            return GameState.MAINSTATE_UNKNOWN
+    def getMainState(self, shot=None):
+        shot = shot or self.device.takeSnapshot()
+        if self.checkSubImage(self.worldmapDetection, shot): return GameState.MAINSTATE_WORLDMAP
+        elif self.checkSubImage(self.insideDetection, shot): return GameState.MAINSTATE_INSIDE
+        elif self._isInCombat(shot): return GameState.MAINSTATE_COMBAT
+        elif self.checkSubImage(self.menuDetection, shot): return GameState.MAINSTATE_MENU
+        else: return GameState.MAINSTATE_UNKNOWN
 
-    def getCombatState(self, screenshot=None):
-        screenshot = screenshot or self.device.takeSnapshot()
-        return GameState.COMBATSTATE_UNKNOWN
+    def getCombatState(self, shot=None):
+        shot = shot or self.device.takeSnapshot()
+        lowerLeftMenuPresent = self.checkSubImage(self.combatMainDetection, shot)
+        if lowerLeftMenuPresent and not self.checkSubImage(self.combatBackButtonDetection, shot):
+            return GameState.COMBATSTATE_TURN_BEGIN
+        elif lowerLeftMenuPresent:
+            return GameState.COMBATSTATE_TURN_INCOMPLETE
+
+        combatVictoryArrowPresent = self.checkSubImage(self.combatVictoryDetection, shot)
+        if self.checkSubImage(self.combatMenuDetection, shot) and not combatVictoryArrowPresent:
+            return GameState.COMBATSTATE_MENU
+        elif combatVictoryArrowPresent:
+            return GameState.COMBATSTATE_VICTORY_NOTIFICATION
+        else:
+            return GameState.COMBATSTATE_UNKNOWN
 
     def getGameState(self):
-        screenshot = self.device.takeSnapshot()
-        mainState = self.getMainState(screenshot)
-        combatState = mainState==GameState.MAINSTATE_COMBAT and self.getCombatState(screenshot) or None
+        shot = self.device.takeSnapshot()
+        mainState = self.getMainState(shot)
+        combatState = mainState==GameState.MAINSTATE_COMBAT and self.getCombatState(shot) or None
         return GameState(mainState, combatState)
 
 class Dir:
