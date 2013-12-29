@@ -124,6 +124,8 @@ class GameStateDetector:
     def __init__(self, monkeydevice):
         self.device = monkeydevice
 
+        self.lunethLPixels = [((753,y), 0xffffff) for y in range(575, 593)]
+
         # subImageDetectionSpecs: (BufferedImage, (x,y,w,h), requiredSimilarityPercent)
         self.worldmapDetection = (self.readImg("map_text.png"), (938,35,82,41), 99.8)
         self.insideDetection = (self.readImg("menu_button_e.png"), (1133,46,20,20), 99.8)
@@ -131,7 +133,7 @@ class GameStateDetector:
         self.combatMainDetection = (self.readImg("lower_left_menu_upper_left_corner.png"), (88,444,12,4), 99.9)
         self.combatMenuDetection = (self.readImg("combat_menu_explanation_frame.png"), (254,53,5,5), 99.9)
         self.combatBackButtonDetection = (self.readImg("combat_back_button_frame.png"), (46,1,5,6), 99.9)
-        self.combatVictoryDetection = (self.readImg("combat_victory_notification_frame.png"), (53,52,5,5), 99.9)
+        self.combatVictoryDetection = (self.readImg("combat_victory_notification_frame.png"), (53,52,5,5), 99.99)
 
     @staticmethod
     def readImg(filename):
@@ -141,14 +143,18 @@ class GameStateDetector:
         scriptDir = os.path.dirname(sys.argv[0])
         return ImageIO.read(File(os.path.join(scriptDir, filename)))
 
-    def checkPixelColors(self, pixelColors, shot=None):
+    def checkPixelColors(self, pixelColors, requiredSimilarityPercent=100.0, shot=None):
         shot = shot or self.device.takeSnapshot()
+        maxAllowedDissimilarity = max(0, len(pixelColors)*0xff*3 * (100.0-requiredSimilarityPercent)/100.0)
+        dissimilarity = 0
         for pixelCoords,expectedColor in pixelColors:
             pixelCoordsInScreenshot = self.horizontalCoordsToScreenshotCoords(pixelCoords, 720)
-            actualColor = shot.getRawPixel(*pixelCoordsInScreenshot)
-            if actualColor != expectedColor:
-                return False
-        return True
+            actualColor = shot.getRawPixelInt(*pixelCoordsInScreenshot) & 0xffffff
+            dissimilarity += self.getPixelDissimilarity(actualColor, expectedColor)
+            if dissimilarity > maxAllowedDissimilarity:
+                break
+        #print "Dissimilarity %.1f/%.1f" % (dissimilarity, maxAllowedDissimilarity)
+        return dissimilarity <= maxAllowedDissimilarity
 
     @staticmethod
     def horizontalCoordsToScreenshotCoords(coords, origHeight):
@@ -203,6 +209,10 @@ class GameStateDetector:
         elif self.checkSubImage(self.menuDetection, shot): return GameState.MAINSTATE_MENU
         else: return GameState.MAINSTATE_UNKNOWN
 
+    def isCombatHpListOnScreen(self, shot=None):
+        shot = shot or self.device.takeSnapshot()
+        return self.checkPixelColors(self.lunethLPixels, 99.95, shot)
+
     def getCombatState(self, shot=None):
         shot = shot or self.device.takeSnapshot()
         lowerLeftMenuPresent = self.checkSubImage(self.combatMainDetection, shot)
@@ -211,10 +221,10 @@ class GameStateDetector:
         elif lowerLeftMenuPresent:
             return GameState.COMBATSTATE_TURN_INCOMPLETE
 
-        combatVictoryArrowPresent = self.checkSubImage(self.combatVictoryDetection, shot)
-        if self.checkSubImage(self.combatMenuDetection, shot) and not combatVictoryArrowPresent:
+        combatVictoryFramePresent = self.checkSubImage(self.combatVictoryDetection, shot)
+        if self.checkSubImage(self.combatMenuDetection, shot) and not combatVictoryFramePresent:
             return GameState.COMBATSTATE_MENU
-        elif combatVictoryArrowPresent:
+        elif combatVictoryFramePresent and not self.isCombatHpListOnScreen(shot):
             return GameState.COMBATSTATE_VICTORY_NOTIFICATION
         else:
             return GameState.COMBATSTATE_UNKNOWN
@@ -416,17 +426,15 @@ class MonkeyActions:
             elif mainState == GameState.MAINSTATE_MENU:
                 print "In menu, backing up"
                 self.pressBack(2.0)
-                continue
             elif mainState in [GameState.MAINSTATE_WORLDMAP, GameState.MAINSTATE_INSIDE]:
                 print "Running around"
                 for i in range(5):
                     self.run(Dir.left, 0.25)
                     self.run(Dir.right, 0.25)
-                continue
+                sleep(1.0) # wait for the Menu button to reappear
             else:
                 print "Unexpected state=%s, will wait and try again" % mainState
                 sleep(0.5)
-                continue
 
     def runAwayFromCombat(self):
         runAwayButtonCoords = (1130,45)
