@@ -195,6 +195,9 @@ class GameStateDetector:
     def getColorComponent(color, componentNumber):
             return (color & (0xff << (componentNumber*8))) >> (componentNumber*8)
 
+    def detectMonsters(self):
+        return None
+
     def _isInCombat(self, shot):
         if self.checkSubImage(self.combatMainDetection, shot): return True
         elif self.checkSubImage(self.combatMenuDetection, shot): return True
@@ -339,8 +342,6 @@ class MonkeyActions:
         self.attack(2) # Arc damages drake#2 but doesn't kill it
         self.castAttackSpell(6, 1, 3) # Refia kills drake#3
         self.useRod(1, 1, 2) # Ingus finishes off drake#2
-        #TODO: see if combat ends. if combat continues, do a fight+rod round
-        #TODO: if combat ends, tap screen until we are really outside combat
 
     def fightGrenadeGrenadeDrake(self):
         self.attack(3) # Luneth kills drake
@@ -353,6 +354,56 @@ class MonkeyActions:
         self.attack(2) # Arc damages/kills grenade
         self.useRod(1, 2, 2) # Refia finishes off drake#2 with ice rod
         self.useRod(1, 2, 2) # Ingus finishes off drake#2 with ice rod
+
+    def fightDefault(self):
+        self.attack(1)
+        self.attack(1)
+        self.useRod(1, 2, 1)
+        self.useRod(1, 2, 1)
+
+    def automaticCombat(self):
+        turnsFought = 0
+        print "=== Automatic Combat ==="
+        while True:
+            gameState = self.gameStateDetector.getGameState()
+            mainState = gameState.mainState
+            if mainState in [GameState.MAINSTATE_INSIDE, GameState.MAINSTATE_WORLDMAP]:
+                print "Fight finished, yay"
+                break
+            elif mainState == GameState.MAINSTATE_COMBAT:
+                combatState = gameState.combatState
+                if combatState == GameState.COMBATSTATE_TURN_BEGIN:
+                    if turnsFought == 0:
+                        self.selectItemFromLowerLeftMenu(1, 0.200)
+                        monsters = self.gameStateDetector.detectMonsters()
+                        self.pressBack(0.200)
+                        print "Detected monsters:", monsters
+                        if monsters == ["Drake", "Drake", "Drake"]: self.fightDrakeDrakeDrake()
+                        elif monsters == ["Drake", "Grenade"]: self.fightDrakeGrenade()
+                        elif monsters == ["Grenade", "Grenade", "Drake"]: self.fightGrenadeGrenadeDrake()
+                        else: self.fightDefault()
+                    else:
+                        self.fightDefault()
+                    sleep(8.0)
+                    turnsFought += 1
+                elif combatState == GameState.COMBATSTATE_TURN_INCOMPLETE:
+                    print "Turn in incomplete state, backing up..."
+                    self.pressBack(2.0)
+                elif combatState == GameState.COMBATSTATE_MENU:
+                    print "In combat menu, backing up..."
+                    self.pressBack(2.0)
+                elif combatState == GameState.COMBATSTATE_VICTORY_NOTIFICATION:
+                    print "In victory notification, tapping screen..."
+                    self.tapScreen(1.0)
+                else:
+                    print "Unexpected combat state=%s, will wait and try again" % combatState
+                    sleep(0.5)
+            elif mainState == GameState.MAINSTATE_MENU:
+                print "In menu, backing up..."
+                self.pressBack(2.0)
+            else:
+                print "Unexpected state=%s, will wait and try again" % mainState
+                sleep(0.5)
 
     def castCureOutsideOfCombat(self):
         self.touch((1154, 57), 1.500) # Menu button
@@ -472,7 +523,7 @@ class MonkeyActions:
         menu.addAction("0", "Use first rod on first enemy", lambda: self.useRod(1, 1, 1))
         menu.addAction("N", "eNter combat", self.enterCombat)
         menu.addAction("E", "Escape from combat", self.runAwayFromCombat)
-        menu.addAction("Z", "Sleep for 4 secs", lambda: sleep(4))
+        menu.addAction("A", "Automatic combat", self.automaticCombat)
 
 def main():
     menu = ActionMenu()
