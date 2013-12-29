@@ -400,7 +400,9 @@ class MonkeyActions:
         print "=== Automatic Training (Bahamut's Lair) ==="
         self.goToStateInside()
         self.restInInvincibleAndReturn()
-        for i in range(6):
+        rounds = 6
+        for i in range(1, rounds+1):
+            print "Starting combat round %d/%d" % (i, rounds)
             self.goToStateCombatTurnBegin()
             self.goToStateInsideByFighting()
             self.castCureOutsideOfCombat()
@@ -419,7 +421,7 @@ class MonkeyActions:
         self.pressBack(1.200) # back to game view
 
     def goToStateInside(self):
-        print "=== Getting inside ==="
+        print "Going to state", GameState.MAINSTATE_INSIDE
         wasOutSide = False
         while True:
             gameState = self.gameStateDetector.getGameState()
@@ -457,7 +459,7 @@ class MonkeyActions:
                 sleep(0.5)
 
     def goToStateInsideOrWorldmapByFighting(self):
-        print "=== Automatic Combat ==="
+        print "Going to state", GameState.MAINSTATE_INSIDE, "or", GameState.MAINSTATE_WORLDMAP, "by fighting"
         while True:
             gameState = self.gameStateDetector.getGameState()
             mainState = gameState.mainState
@@ -497,7 +499,7 @@ class MonkeyActions:
         self.goToStateInside()
 
     def goToStateWorldmapFromBahamutsLair(self):
-        print "Exiting Bahamut's lair..."
+        print "Going to state", GameState.MAINSTATE_WORLDMAP, "from Bahamut's Lair"
         self.run(Dir.up, 1.5)
         while True:
             gameState = self.gameStateDetector.getGameState()
@@ -570,8 +572,8 @@ class MonkeyActions:
         self.run(Dir.up, 1.000)
         self.run(Dir.left, 1.500)
         self.run(Dir.down, 0.650)
-        self.run(Dir.right, 0.150)
-        sleep(0.200) # wait for exclamation bubble
+        self.run(Dir.right, 0.250)
+        sleep(0.300) # wait for exclamation bubble
         print "Sleeping..."
         self.tapScreen(1.000) #use bed
         self.touch((640,520), 14.500) #tap Yes
