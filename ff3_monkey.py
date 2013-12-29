@@ -559,7 +559,7 @@ class MonkeyActions:
                 for i in range(10):
                     self.run(Dir.left, 0.21)
                     self.run(Dir.right, 0.21)
-                sleep(0.6) # wait for Menu button to reappear
+                sleep(0.7) # wait for Menu button to reappear
             else:
                 print "Unknown state=%s, will retry" % mainState
                 sleep(0.5)
