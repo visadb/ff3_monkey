@@ -212,7 +212,6 @@ class GameStateDetector:
         monsters = []
 
         for i in range(numberOfMonsters):
-            print "Detecting enemy", i
             drakeDetection = self._translateDetection(self.monsterDrakeDetection, 0, i*self.monsterNameYDelta)
             grenadeDetection = self._translateDetection(self.monsterGrenadeDetection, 0, i*self.monsterNameYDelta)
             if self.checkSubImage(drakeDetection, shot): monsters.append("Drake")
@@ -371,8 +370,8 @@ class MonkeyActions:
 
     def fightDrakeDrakeDrake(self):
         self.attack(1) # Luneth kills drake#1
-        self.attack(2) # Arc damages drake#2 but doesn't kill it
-        self.castAttackSpell(6, 1, 3) # Refia kills drake#3
+        self.attack(2) # Arc damages/kills drake#2
+        self.castAttackSpell(6, 1, 3) # Refia kills drake#3 with Aeroga
         self.useRod(1, 1, 2) # Ingus finishes off drake#2
 
     def fightGrenadeGrenadeDrake(self):
@@ -393,7 +392,71 @@ class MonkeyActions:
         self.useRod(1, 2, 1)
         self.useRod(1, 2, 1)
 
-    def automaticCombat(self):
+    def automaticTrainingInBahamutsLairForever(self):
+        while True:
+            self.automaticTrainingInBahamutsLair()
+
+    def automaticTrainingInBahamutsLair(self):
+        print "=== Automatic Training (Bahamut's Lair) ==="
+        self.goToStateInside()
+        self.restInInvincibleAndReturn()
+        for i in range(6):
+            self.goToStateCombatTurnBegin()
+            self.goToStateInsideByFighting()
+            self.castCureOutsideOfCombat()
+
+    def castCureOutsideOfCombat(self):
+        print "=== Casting cure ==="
+        self.touch((1154, 57), 1.500) # Menu button
+        self.touch((1130, 66), 0.300) # Magic button
+        self.touch((470, 410), 0.500) # Choose Refia
+        self.touch((506, 200), 0.300) # Choose Cure
+        self.touch((951, 541), 0.300) # Choose All Party Members
+        self.touch((951, 541), 0.400) # Confirm All Party Members
+        self.touch((951, 541), 0.400) # Cast cure a second time
+        self.pressBack(0.200) # back to spell choise
+        self.pressBack(0.200) # back to main menu
+        self.pressBack(1.200) # back to game view
+
+    def goToStateInside(self):
+        print "=== Getting inside ==="
+        wasOutSide = False
+        while True:
+            gameState = self.gameStateDetector.getGameState()
+            mainState = gameState.mainState
+            if mainState == GameState.MAINSTATE_INSIDE:
+                print "We are inside, yay"
+                if wasOutSide:
+                    print "We were outside, so running down to the bridge..."
+                    self.run(Dir.down, 1.0)
+                break
+            elif mainState == GameState.MAINSTATE_COMBAT:
+                combatState = gameState.combatState
+                print "We got into a fight (%s), will run away", combatState
+                if combatState == GameState.COMBATSTATE_TURN_BEGIN:
+                    print "Running away"
+                    self.runAwayFromCombat()
+                elif combatState in [GameState.COMBATSTATE_TURN_INCOMPLETE, GameState.COMBATSTATE_MENU]:
+                    print "In combat-substate, backing up..."
+                    self.pressBack(2.0)
+                elif combatState == GameState.COMBATSTATE_VICTORY_NOTIFICATION:
+                    print "In victory notifications, tapping screen..."
+                    self.tapScreen(1.0)
+                else:
+                    print "Unknown combat state=%s, will retry..." % combatState
+                    sleep(0.5)
+            elif mainState == GameState.MAINSTATE_WORLDMAP:
+                print "We are outside, seeing if running up helps..."
+                wasOutSide = True
+                self.run(Dir.up, 2.0)
+            elif mainState == GameState.MAINSTATE_MENU:
+                print "In menu, backing up"
+                self.pressBack(2.0)
+            else:
+                print "Unknown state=%s, will retry..." % mainState
+                sleep(0.5)
+
+    def goToStateInsideOrWorldmapByFighting(self):
         print "=== Automatic Combat ==="
         while True:
             gameState = self.gameStateDetector.getGameState()
@@ -412,12 +475,9 @@ class MonkeyActions:
                     elif monsters == ["Drake", "Grenade"]: self.fightDrakeGrenade()
                     elif monsters == ["Grenade", "Grenade", "Drake"]: self.fightGrenadeGrenadeDrake()
                     else: self.fightDefault()
-                    sleep(8.0)
-                elif combatState == GameState.COMBATSTATE_TURN_INCOMPLETE:
+                    sleep(10.0)
+                elif combatState in [GameState.COMBATSTATE_TURN_INCOMPLETE, GameState.COMBATSTATE_MENU]:
                     print "Turn in incomplete state, backing up..."
-                    self.pressBack(2.0)
-                elif combatState == GameState.COMBATSTATE_MENU:
-                    print "In combat menu, backing up..."
                     self.pressBack(2.0)
                 elif combatState == GameState.COMBATSTATE_VICTORY_NOTIFICATION:
                     print "In victory notification, tapping screen..."
@@ -432,44 +492,79 @@ class MonkeyActions:
                 print "Unknown state=%s, will retry..." % mainState
                 sleep(0.5)
 
-    def castCureOutsideOfCombat(self):
-        self.touch((1154, 57), 1.500) # Menu button
-        self.touch((1130, 66), 0.300) # Magic button
-        self.touch((470, 410), 0.500) # Choose Refia
-        self.touch((506, 200), 0.300) # Choose Cure
-        self.touch((951, 541), 0.300) # Choose All Party Members
-        self.touch((951, 541), 0.400) # Confirm All Party Members
-        self.touch((951, 541), 0.400) # Cast cure a second time
-        self.pressBack(0.200) # back to spell choise
-        self.pressBack(0.200) # back to main menu
-        self.pressBack(1.200) # back to game view
+    def goToStateInsideByFighting(self):
+        self.goToStateInsideOrWorldmapByFighting()
+        self.goToStateInside()
 
-    def restInInvincibleAndReturn(self):
-        startTime = time()
-        print "=== Rest in Invincible ==="
+    def goToStateWorldmapFromBahamutsLair(self):
         print "Exiting Bahamut's lair..."
         self.run(Dir.up, 1.5)
         while True:
-            mainState = self.getMainState()
+            gameState = self.gameStateDetector.getGameState()
+            mainState = gameState.mainState
             if mainState == GameState.MAINSTATE_WORLDMAP:
                 print "We are outside, yay"
                 break
             elif mainState == GameState.MAINSTATE_COMBAT:
-                print "We got into a fight, trying to run away"
-                self.runAwayFromCombat()
-                continue
+                combatState = mainState.combatState
+                print "We got into combat (%s), trying to run away" % combatState
+                if combatState == GameState.COMBATSTATE_TURN_BEGIN:
+                    self.runAwayFromCombat()
+                elif combatState in [GameState.COMBATSTATE_TURN_INCOMPLETE, GameState.COMBATSTATE_MENU]:
+                    print "In menu or turn incomplete, backing up..."
+                    self.pressBack(2.0)
+                elif combatState == GameState.COMBATSTATE_VICTORY_NOTIFICATION:
+                    print "In victory notification, tapping screen..."
+                    self.tapScreen(1.0)
+                else:
+                    print "Unknown combat state=%s, will retry..." % combatState
+                    sleep(0.5)
             elif mainState == GameState.MAINSTATE_INSIDE:
                 print "Still inside, running up..."
                 self.run(Dir.up, 2.0)
-                continue
             elif mainState == GameState.MAINSTATE_MENU:
                 print "In menu, backing up"
                 self.pressBack(2.0)
-                continue
             else:
-                print "Unexpected state=%s, will wait and try again" % mainState
+                print "Unknown state=%s, will wait and try again" % mainState
                 sleep(0.5)
-                continue
+
+    def goToStateCombatTurnBegin(self):
+        print "Going to state", GameState.COMBATSTATE_TURN_BEGIN
+        while True:
+            gameState = self.gameStateDetector.getGameState()
+            mainState = gameState.mainState
+            if mainState == GameState.MAINSTATE_COMBAT:
+                combatState = gameState.combatState
+                if combatState == GameState.COMBATSTATE_TURN_BEGIN:
+                    print "We are in %s, yay" % GameState.COMBATSTATE_TURN_BEGIN
+                    return
+                elif combatState in [GameState.COMBATSTATE_TURN_INCOMPLETE, GameState.COMBATSTATE_MENU]:
+                    print "In menu or turn incomplete, backing up..."
+                    self.pressBack(2.0)
+                elif combatState == GameState.COMBATSTATE_VICTORY_NOTIFICATION:
+                    print "In victory notification, tapping screen..."
+                    self.tapScreen(1.0)
+                else:
+                    print "Unknown combat state=%s, will retry..." % combatState
+                    sleep(0.5)
+            elif mainState == GameState.MAINSTATE_MENU:
+                print "In menu, backing up"
+                self.pressBack(2.0)
+            elif mainState in [GameState.MAINSTATE_WORLDMAP, GameState.MAINSTATE_INSIDE]:
+                print "Running around"
+                for i in range(5):
+                    self.run(Dir.left, 0.21)
+                    self.run(Dir.right, 0.21)
+                sleep(1.0) # wait for the Menu button to reappear
+            else:
+                print "Unknown state=%s, will wait and try again" % mainState
+                sleep(0.5)
+
+    def restInInvincibleAndReturn(self):
+        startTime = time()
+        print "=== Rest in Invincible ==="
+        self.goToStateWorldmapFromBahamutsLair()
         print "Entering Invincible and running to the bed..."
         self.tapScreen(2.100)
         self.run(Dir.up, 1.000)
@@ -488,31 +583,8 @@ class MonkeyActions:
         self.run(Dir.down, 1.050)
         self.run(Dir.left, 1.200)
         sleep(1.1) # wait for exit
-        self.run(Dir.up, 1.5)  # enter Bahamut's lair
-        sleep(1.0) # wait for entry
-        self.run(Dir.down, 1.0) # run to the hunting spot
-        # TODO: make sure we did not get into a fight
+        self.goToStateInside()
         print "Done resting, took %.1fs" % ((time()-startTime))
-
-    def enterCombat(self):
-        print "=== Enter combat ==="
-        while True:
-            mainState = self.getMainState()
-            if mainState == GameState.MAINSTATE_COMBAT:
-                print "We are in combat, yay"
-                break
-            elif mainState == GameState.MAINSTATE_MENU:
-                print "In menu, backing up"
-                self.pressBack(2.0)
-            elif mainState in [GameState.MAINSTATE_WORLDMAP, GameState.MAINSTATE_INSIDE]:
-                print "Running around"
-                for i in range(5):
-                    self.run(Dir.left, 0.21)
-                    self.run(Dir.right, 0.21)
-                sleep(1.0) # wait for the Menu button to reappear
-            else:
-                print "Unexpected state=%s, will wait and try again" % mainState
-                sleep(0.5)
 
     def runAwayFromCombat(self):
         runAwayButtonCoords = (1130,45)
@@ -551,10 +623,12 @@ class MonkeyActions:
         menu.addAction("R", "Rest in Invincible", self.restInInvincibleAndReturn)
         menu.addAction("A", "Attack first enemy", lambda: self.attack(1))
         menu.addAction("0", "Use first rod on first enemy", lambda: self.useRod(1, 1, 1))
-        menu.addAction("N", "eNter combat", self.enterCombat)
+        menu.addAction("N", "eNter combat", self.goToStateCombatTurnBegin)
         menu.addAction("E", "Escape from combat", self.runAwayFromCombat)
-        menu.addAction("A", "Automatic combat", self.automaticCombat)
+        menu.addAction("A", "Automatic combat", self.goToStateInsideOrWorldmapByFighting)
         menu.addAction("D", "Detect monsters", self.testDetectMonsters)
+        menu.addAction("G", "Automatic traininG", self.automaticTrainingInBahamutsLair)
+        menu.addAction("shift G", "Automatic traininG forever", self.automaticTrainingInBahamutsLairForever)
 
 def main():
     menu = ActionMenu()
