@@ -394,7 +394,6 @@ class MonkeyActions:
         self.useRod(1, 2, 1)
 
     def automaticCombat(self):
-        turnsFought = 0
         print "=== Automatic Combat ==="
         while True:
             gameState = self.gameStateDetector.getGameState()
@@ -405,19 +404,15 @@ class MonkeyActions:
             elif mainState == GameState.MAINSTATE_COMBAT:
                 combatState = gameState.combatState
                 if combatState == GameState.COMBATSTATE_TURN_BEGIN:
-                    if turnsFought == 0:
-                        self.selectItemFromLowerLeftMenu(1, 0.200)
-                        monsters = self.gameStateDetector.detectMonsters()
-                        self.pressBack(0.200)
-                        print "Detected monsters:", monsters
-                        if monsters == ["Drake", "Drake", "Drake"]: self.fightDrakeDrakeDrake()
-                        elif monsters == ["Drake", "Grenade"]: self.fightDrakeGrenade()
-                        elif monsters == ["Grenade", "Grenade", "Drake"]: self.fightGrenadeGrenadeDrake()
-                        else: self.fightDefault()
-                    else:
-                        self.fightDefault()
+                    self.selectItemFromLowerLeftMenu(1, 0.200)
+                    monsters = self.gameStateDetector.detectMonsters()
+                    self.pressBack(0.200)
+                    print "Detected monsters:", monsters
+                    if monsters == ["Drake", "Drake", "Drake"]: self.fightDrakeDrakeDrake()
+                    elif monsters == ["Drake", "Grenade"]: self.fightDrakeGrenade()
+                    elif monsters == ["Grenade", "Grenade", "Drake"]: self.fightGrenadeGrenadeDrake()
+                    else: self.fightDefault()
                     sleep(8.0)
-                    turnsFought += 1
                 elif combatState == GameState.COMBATSTATE_TURN_INCOMPLETE:
                     print "Turn in incomplete state, backing up..."
                     self.pressBack(2.0)
@@ -428,13 +423,13 @@ class MonkeyActions:
                     print "In victory notification, tapping screen..."
                     self.tapScreen(1.0)
                 else:
-                    print "Unexpected combat state=%s, will wait and try again" % combatState
+                    print "Unknown combat state=%s, will retry..." % combatState
                     sleep(0.5)
             elif mainState == GameState.MAINSTATE_MENU:
                 print "In menu, backing up..."
                 self.pressBack(2.0)
             else:
-                print "Unexpected state=%s, will wait and try again" % mainState
+                print "Unknown state=%s, will retry..." % mainState
                 sleep(0.5)
 
     def castCureOutsideOfCombat(self):
