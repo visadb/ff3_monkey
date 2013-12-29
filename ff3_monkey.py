@@ -149,7 +149,7 @@ class GameStateDetector:
         from javax.imageio import ImageIO
         import sys, os
         scriptDir = os.path.dirname(sys.argv[0])
-        return ImageIO.read(File(os.path.join(scriptDir, filename)))
+        return ImageIO.read(File(os.path.join(scriptDir, "stateDetectionImages", filename)))
 
     def checkPixelColors(self, pixelColors, requiredSimilarityPercent=100.0, shot=None):
         shot = shot or self.device.takeSnapshot()
