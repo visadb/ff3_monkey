@@ -130,10 +130,18 @@ class GameStateDetector:
         self.worldmapDetection = (self.readImg("map_text.png"), (938,35,82,41), 99.8)
         self.insideDetection = (self.readImg("menu_button_e.png"), (1133,46,20,20), 99.8)
         self.menuDetection = (self.readImg("menu_back_text.png"), (608,672,35,24), 99.8)
+
         self.combatMainDetection = (self.readImg("lower_left_menu_upper_left_corner.png"), (88,444,12,4), 99.9)
         self.combatMenuDetection = (self.readImg("combat_menu_explanation_frame.png"), (254,53,5,5), 99.9)
         self.combatBackButtonDetection = (self.readImg("combat_back_button_frame.png"), (46,1,5,6), 99.9)
         self.combatVictoryDetection = (self.readImg("combat_victory_notification_frame.png"), (53,52,5,5), 99.99)
+
+        self.combat2ndMonsterDetection = (self.readImg("combat_2rd_enemy_frame.png"), (424,616,6,4), 99.99)
+        self.combat3rdMonsterDetection = (self.readImg("combat_3rd_enemy_frame.png"), (424,706,6,4), 99.99)
+        self.monsterDrakeDetection = (self.readImg("monster_drake_k_line.png"), (149,478,2,18), 99.5)
+
+        self.monsterGrenadeDetection = (self.readImg("monster_grenade_d_line.png"), (193,478,1,19), 99.0)
+        self.monsterNameYDelta = 90
 
     @staticmethod
     def readImg(filename):
@@ -195,8 +203,32 @@ class GameStateDetector:
     def getColorComponent(color, componentNumber):
             return (color & (0xff << (componentNumber*8))) >> (componentNumber*8)
 
-    def detectMonsters(self):
-        return None
+    def detectMonsters(self, shot=None):
+        shot = shot or self.device.takeSnapshot()
+        gameState = self.getGameState(shot)
+        assert(gameState.mainState == GameState.MAINSTATE_COMBAT)
+        assert(gameState.combatState == GameState.COMBATSTATE_TURN_INCOMPLETE)
+        numberOfMonsters = self._detectNumberOfMonsters(shot)
+        monsters = []
+
+        for i in range(numberOfMonsters):
+            print "Detecting enemy", i
+            drakeDetection = self._translateDetection(self.monsterDrakeDetection, 0, i*self.monsterNameYDelta)
+            grenadeDetection = self._translateDetection(self.monsterGrenadeDetection, 0, i*self.monsterNameYDelta)
+            if self.checkSubImage(drakeDetection, shot): monsters.append("Drake")
+            elif self.checkSubImage(grenadeDetection, shot): monsters.append("Grenade")
+            else: monsters.append(None)
+        return monsters
+
+    def _detectNumberOfMonsters(self, shot):
+        if self.checkSubImage(self.combat3rdMonsterDetection, shot): return 3
+        elif self.checkSubImage(self.combat2ndMonsterDetection, shot): return 2
+        elif self.checkSubImage(self.combatMainDetection, shot): return 1
+        else: return 0
+
+    @staticmethod
+    def _translateDetection(orig, dx, dy):
+        return (orig[0], (orig[1][0]+dx, orig[1][1]+dy, orig[1][2], orig[1][3]), orig[2])
 
     def _isInCombat(self, shot):
         if self.checkSubImage(self.combatMainDetection, shot): return True
@@ -232,8 +264,8 @@ class GameStateDetector:
         else:
             return GameState.COMBATSTATE_UNKNOWN
 
-    def getGameState(self):
-        shot = self.device.takeSnapshot()
+    def getGameState(self, shot=None):
+        shot = shot or self.device.takeSnapshot()
         mainState = self.getMainState(shot)
         combatState = mainState==GameState.MAINSTATE_COMBAT and self.getCombatState(shot) or None
         return GameState(mainState, combatState)
@@ -480,8 +512,8 @@ class MonkeyActions:
             elif mainState in [GameState.MAINSTATE_WORLDMAP, GameState.MAINSTATE_INSIDE]:
                 print "Running around"
                 for i in range(5):
-                    self.run(Dir.left, 0.25)
-                    self.run(Dir.right, 0.25)
+                    self.run(Dir.left, 0.21)
+                    self.run(Dir.right, 0.21)
                 sleep(1.0) # wait for the Menu button to reappear
             else:
                 print "Unexpected state=%s, will wait and try again" % mainState
@@ -498,6 +530,9 @@ class MonkeyActions:
 
     def printCurrentState(self):
         print self.gameStateDetector.getGameState()
+
+    def testDetectMonsters(self):
+        print self.gameStateDetector.detectMonsters()
 
     def addMenuActions(self, menu):
         runDurationNormal = 0.5
@@ -524,6 +559,7 @@ class MonkeyActions:
         menu.addAction("N", "eNter combat", self.enterCombat)
         menu.addAction("E", "Escape from combat", self.runAwayFromCombat)
         menu.addAction("A", "Automatic combat", self.automaticCombat)
+        menu.addAction("D", "Detect monsters", self.testDetectMonsters)
 
 def main():
     menu = ActionMenu()
