@@ -332,6 +332,12 @@ class MonkeyActions:
         #TODO: see if combat ends. if combat continues, do a fight+rod round
         #TODO: if combat ends, tap screen until we are really outside combat
 
+    def fightGrenadeGrenadeDrake(self):
+        self.attack(3) # Luneth kills drake
+        self.attack(1) # Arc damages/kills grenade#1
+        self.useRod(1, 2, 1) # Refia finishes off grenade#1 with ice rod
+        self.useRod(1, 2, 2) # Ingus finishes off grenade#2 with ice rod
+
     def fightDrakeGrenade(self):
         self.attack(1) # Luneth kills drake#1
         self.attack(2) # Arc damages/kills grenade
@@ -450,7 +456,7 @@ class MonkeyActions:
         menu.addAction("B", "Back", self.pressBack)
         menu.addAction("T", "Tap the screen", self.tapScreen)
         menu.addAction("1", "Fight Drake Drake Drake", self.fightDrakeDrakeDrake)
-        menu.addAction("2", "Fight Grenade Grenade Drake", lambda: sleep(1))
+        menu.addAction("2", "Fight Grenade Grenade Drake", self.fightGrenadeGrenadeDrake)
         menu.addAction("3", "Fight Drake Grenade", self.fightDrakeGrenade)
         menu.addAction("C", "Cure outside of combat", self.castCureOutsideOfCombat)
         menu.addAction("R", "Rest in Invincible", self.restInInvincibleAndReturn)
